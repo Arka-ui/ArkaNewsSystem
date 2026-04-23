@@ -1,8 +1,8 @@
 {
   "author": "Arka",
   "site_title": "Arka News System",
-  "github_owner": "OWNER",
-  "github_repo": "REPO",
-  "github_branch": "main",
-  "site_url": ""
+  "github_owner": "Arka-ui",
+  "github_repo": "ArkaNewsSystem",
+  "github_branch": "master",
+  "site_url": "https://arka-ui.github.io/ArkaNewsSystem"
 }
