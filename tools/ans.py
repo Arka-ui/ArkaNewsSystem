@@ -240,6 +240,102 @@ def cmd_post(args: argparse.Namespace) -> int:
     return 0
 
 
+
+# ---------------------------------------------------------------------------
+# publish  (post + push to GitHub via Contents API — no git required)
+# ---------------------------------------------------------------------------
+def cmd_publish(args: argparse.Namespace) -> int:
+    import urllib.request
+    import urllib.error
+
+    # 1. Reuse post logic to create the signed .ans in-memory
+    NEWS_DIR.mkdir(exist_ok=True)
+    cfg = load_config()
+
+    title = args.title or input("Title: ").strip()
+    if not title:
+        print("title required"); return 1
+
+    author = args.author or cfg.get("author")
+    if not author:
+        author = input("Author: ").strip() or "anonymous"
+        cfg["author"] = author
+        save_config(cfg)
+
+    tags = [t.strip() for t in (args.tags or "").split(",") if t.strip()]
+
+    if args.body:
+        body = args.body
+    elif args.file:
+        body = Path(args.file).read_text(encoding="utf-8")
+    else:
+        print("Body (end with a single '.' on its own line):")
+        lines: list[str] = []
+        for line in sys.stdin:
+            if line.strip() == ".":
+                break
+            lines.append(line.rstrip("\n"))
+        body = "\n".join(lines)
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    news_id = compute_id(author, timestamp, title, tags, body)
+    payload = build_payload(author, timestamp, title, tags, body, news_id)
+
+    priv = load_private_key()
+    sig = priv.sign(payload.encode("utf-8"))
+    sig_b64 = base64.b64encode(sig).decode("ascii")
+    final = payload + "\nsig: " + sig_b64 + "\n"
+
+    date = timestamp[:10]
+    filename = f"{date}-{slugify(title)}-{news_id[:8]}.ans"
+
+    # 2. Push via GitHub Contents API
+    token = args.token or os.environ.get("GITHUB_TOKEN") or cfg.get("github_token")
+    if not token:
+        print("ERROR: no GitHub token — set GITHUB_TOKEN env var, pass --token, or add github_token to ans.config.json")
+        return 1
+
+    owner = cfg.get("github_owner")
+    repo  = cfg.get("github_repo")
+    branch = cfg.get("github_branch", "master")
+    if not owner or not repo:
+        print("ERROR: github_owner / github_repo missing from ans.config.json")
+        return 1
+
+    content_b64 = base64.b64encode(final.encode("utf-8")).decode("ascii")
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/news/{filename}"
+    payload_api = json.dumps({
+        "message": f"Post: {title}",
+        "content": content_b64,
+        "branch": branch,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        api_url,
+        data=payload_api,
+        method="PUT",
+        headers={
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "User-Agent": "ans-cli/1.0",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read())
+        sha = result["content"]["sha"][:8]
+        html = result["content"]["html_url"]
+        print(f"published: {filename}")
+        print(f"id={news_id}")
+        print(f"sha={sha}  url={html}")
+        print("CI will verify + rebuild the API automatically.")
+        return 0
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()
+        print(f"GitHub API error {e.code}: {body_err}")
+        return 1
+
 # ---------------------------------------------------------------------------
 # verify
 # ---------------------------------------------------------------------------
@@ -427,6 +523,15 @@ def main() -> int:
     po.add_argument("--body", help="body text inline")
     po.add_argument("--file", help="read body from this file")
     po.set_defaults(func=cmd_post)
+
+    pub_cmd = sub.add_parser("publish", help="Create, sign and push directly to GitHub (no git needed)")
+    pub_cmd.add_argument("--title")
+    pub_cmd.add_argument("--author")
+    pub_cmd.add_argument("--tags", help="comma-separated")
+    pub_cmd.add_argument("--body", help="body text inline")
+    pub_cmd.add_argument("--file", help="read body from this file")
+    pub_cmd.add_argument("--token", help="GitHub personal access token (overrides env/config)")
+    pub_cmd.set_defaults(func=cmd_publish)
 
     v = sub.add_parser("verify", help="Verify all .ans files")
     v.set_defaults(func=cmd_verify)
