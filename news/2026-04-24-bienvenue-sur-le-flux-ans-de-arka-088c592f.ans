@@ -1,0 +1,19 @@
+ANS1
+id: 088c592f205351c9d5b311b0c38d62acc60c6efb61c613bd08b8a2465d542229
+author: Arka
+timestamp: 2026-04-24T16:22:28Z
+---
+title: Bienvenue sur le flux ANS de Arka
+tags: meta,ans,riftmc
+---
+Bienvenue sur le flux de news officiel d'Arka.
+
+Ce flux utilise **Arka News System (ANS)** — un système de publication de news open-source, hébergé sur GitHub, signé cryptographiquement avec Ed25519.
+
+Chaque article est signé, vérifié par CI, et distribué via une API statique sur GitHub Pages.
+
+Retrouvez ici les actualités de **RiftMC** et des projets en cours.
+
+— Arka
+
+sig: jwewJnOGr6o3NpKOSpIFYzEZe95rFc9G/IkY607y1mV1IH7eT1KaJIy4jakrpsnZS68OWnsYV8K38AfU5f8YDQ==
